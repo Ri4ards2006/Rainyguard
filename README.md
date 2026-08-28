@@ -107,6 +107,6 @@ Select ESP32 Dev Module as your board, set Upload Speed to 115200 (or 921600), a
 
 License
 MIT License. Feel free to fork, adapt, and deploy on your own hardware.
-
+  
 
 ---
