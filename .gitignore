@@ -1,0 +1,17 @@
+# Build-Artefakte & Toolchains
+.pio/
+build/
+*.bin
+*.elf
+*.hex
+
+# Lokale IDE-Dateien
+.vscode/
+.idea/
+
+# Datenschutz & Schulunterlagen (keine Office-/PDF-Dokumente ins Repo)
+*.pdf
+*.odt
+*.docx
+docs/
+antrag*
