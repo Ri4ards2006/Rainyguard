@@ -2,6 +2,7 @@
 #include <DHT.h>
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
+#include <ESP32Servo.h>
 
 // --- Pin-Definitionen ---
 #define PIN_RAIN_SENSOR   34  // Keyestudio Steam/Drop Sensor Dach (Analog)
@@ -13,14 +14,20 @@
 #define PIN_LED_STATUS    12  // Status LED
 #define PIN_BUZZER        25  // Passiver Piezo Buzzer
 #define PIN_BTN_RESET     16  // Reset Taster
+#define PIN_SERVO_WINDOW  13  // Servo Motor Fenster / Klappe
 
 // Dedizierte I2C-Pins des ESP32 Boards
 #define I2C_SDA           21
 #define I2C_SCL           22
 
+// Servo-Winkel (Je nach Ausrichtung 0° offen / 90° zu)
+#define WINDOW_OPEN_DEG   0
+#define WINDOW_CLOSE_DEG  90
+
 // --- Hardware-Objekte ---
 DHT dht(PIN_DHT, PIN_DHT_TYPE);
 LiquidCrystal_I2C lcd(0x27, 16, 2);
+Servo windowServo;
 
 // --- FSM Phasen ---
 enum SystemPhase {
@@ -55,6 +62,11 @@ void setup() {
   pinMode(PIN_FAN_DIR, OUTPUT);
   pinMode(PIN_LED_STATUS, OUTPUT);
   pinMode(PIN_BUZZER, OUTPUT);
+
+  // Servo Setup
+  windowServo.setPeriodHertz(50);
+  windowServo.attach(PIN_SERVO_WINDOW, 500, 2400);
+  windowServo.write(WINDOW_OPEN_DEG); // Startposition: Offen
 
   setFan(0);
   digitalWrite(PIN_LED_STATUS, LOW);
@@ -91,8 +103,7 @@ void loop() {
       return;
     }
 
-    // --- Phasen-Eskalation (Angepasst fuer Keyestudio Steam-Sensor & Raumluft) ---
-    // Trocken: ADC ~ 0 .. 100 | Nässe/Tropfen: ADC > 500
+    // --- Phasen-Eskalation ---
     if (rainRaw > 500 || humidity > 90.0) {
       currentPhase = PHASE_3_EMERGENCY_RAIN;
     } else if (humidity >= 78.0) {
@@ -110,6 +121,7 @@ void loop() {
     switch (currentPhase) {
       case PHASE_0_NORMAL:
         setFan(0);
+        windowServo.write(WINDOW_OPEN_DEG);
         digitalWrite(PIN_LED_STATUS, LOW);
         noTone(PIN_BUZZER);
 
@@ -122,6 +134,7 @@ void loop() {
 
       case PHASE_1_VENTILATION:
         setFan(130);
+        windowServo.write(WINDOW_OPEN_DEG);
         digitalWrite(PIN_LED_STATUS, (now / 500) % 2);
         noTone(PIN_BUZZER);
 
@@ -134,9 +147,9 @@ void loop() {
 
       case PHASE_2_CRITICAL:
         setFan(255);
+        windowServo.write(WINDOW_OPEN_DEG);
         digitalWrite(PIN_LED_STATUS, (now / 200) % 2);
         
-        // Akustischer Intervall-Warnton (1500 Hz)
         if (now % 1000 < 150) {
           tone(PIN_BUZZER, 1500);
         } else {
@@ -151,10 +164,10 @@ void loop() {
         break;
 
       case PHASE_3_EMERGENCY_RAIN:
-        setFan(0);
+        setFan(0); // Not-Aus Luefter
+        windowServo.write(WINDOW_CLOSE_DEG); // Fenster sofort verriegeln
         digitalWrite(PIN_LED_STATUS, HIGH);
         
-        // Wechselnder 2-Ton-Alarm (2200 Hz / 1600 Hz)
         if ((now / 200) % 2) {
           tone(PIN_BUZZER, 2200);
         } else {
