@@ -1,54 +1,81 @@
+/**
+ * @file Rainyguard.ino
+ * @brief Autonome Klimasteuerung und Unwetterschutz auf Basis eines ESP32.
+ * 
+ * Deterministische Finite State Machine (FSM) zur sensorgestuetzten Steuerung
+ * von Lueftung, Fenstermechanik und akustischen/visuellen Warnsystemen.
+ * 
+ * Hardware: Keyestudio ESP32 Smart Home Shield
+ */
+
 #include <Arduino.h>
 #include <DHT.h>
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 #include <ESP32Servo.h>
 
-// --- Pin-Definitionen ---
-#define PIN_RAIN_SENSOR   34  // Keyestudio Steam/Drop Sensor Dach (Analog)
-#define PIN_DHT           17  // DHT11 Data Pin
+// ============================================================================
+// 1. PIN-ZUWEISUNGEN & HARDWARE-PARAMETER
+// ============================================================================
+
+// Sensoren
+#define PIN_RAIN_SENSOR   34  // Analog-In: Keyestudio Steam/Water Drop Sensor (Dach)
+#define PIN_DHT           17  // Digital I/O: DHT11 Kombisensor (Temp/Feuchte)
 #define PIN_DHT_TYPE      DHT11
 
-#define PIN_FAN_PWM       18  // Luefter Speed (PWM)
-#define PIN_FAN_DIR       19  // Luefter Direction/Enable
-#define PIN_LED_STATUS    12  // Status LED
-#define PIN_BUZZER        25  // Passiver Piezo Buzzer
-#define PIN_BTN_RESET     16  // Reset Taster
-#define PIN_SERVO_WINDOW  13  // Servo Motor Fenster / Klappe
+// Aktoren & Signalisierung
+#define PIN_FAN_PWM       18  // Luefter: Drehzahlsteuerung via PWM (0-255)
+#define PIN_FAN_DIR       19  // Luefter: H-Bruecken Richtungs-/Enable-Pin
+#define PIN_LED_STATUS    12  // Status-LED (Taktung signalisiert Eskalationsstufe)
+#define PIN_BUZZER        25  // Passiver Piezo-Buzzer (benoetigt Frequenzsignal via tone())
+#define PIN_BTN_RESET     16  // Taster mit internem Pullup
+#define PIN_SERVO_WINDOW  13  // PWM-Signal fuer Servomotor (Fensterverriegelung)
 
-// Dedizierte I2C-Pins des ESP32 Boards
+// Hardware-I2C Pins (Standard ESP32 Bus)
 #define I2C_SDA           21
 #define I2C_SCL           22
 
-// Servo-Winkel (Je nach Ausrichtung 0° offen / 90° zu)
-#define WINDOW_OPEN_DEG   0
-#define WINDOW_CLOSE_DEG  90
+// Mechanische Anschlaege des Fensterservos
+#define WINDOW_OPEN_DEG    0  // Grundstellung: Lueftung zulaessig
+#define WINDOW_CLOSE_DEG  90  // Notfallstellung: Mechanisch verriegelt
 
-// --- Hardware-Objekte ---
+// ============================================================================
+// 2. OBJEKT-INSTANZIIERUNG & ZUSTANDSKONFIGURATION
+// ============================================================================
+
 DHT dht(PIN_DHT, PIN_DHT_TYPE);
-LiquidCrystal_I2C lcd(0x27, 16, 2);
+LiquidCrystal_I2C lcd(0x27, 16, 2);  // Adresse 0x27 via I2C-Scanner verifiziert
 Servo windowServo;
 
-// --- FSM Phasen ---
+// Zustandsdefinitionen der Finite State Machine (FSM)
 enum SystemPhase {
-  PHASE_0_NORMAL = 0,
-  PHASE_1_VENTILATION = 1,
-  PHASE_2_CRITICAL = 2,
-  PHASE_3_EMERGENCY_RAIN = 3
+  PHASE_0_NORMAL = 0,          // Normale Raumluft, Sensorik trocken
+  PHASE_1_VENTILATION = 1,     // Erhoehte Feuchte -> Gedaempfte Lueftung
+  PHASE_2_CRITICAL = 2,        // Kritische Feuchte -> Maximale Entlueftung
+  PHASE_3_EMERGENCY_RAIN = 3   // Nasse Sensorplatte / Extremfeuchte -> Verriegelung
 };
 
 SystemPhase currentPhase = PHASE_0_NORMAL;
 
+// Globale Messwerte & Puffer
 float temperature = 0.0;
 float humidity = 0.0;
 int rainRaw = 0;
 unsigned long lastUpdate = 0;
-char lineBuffer[17];
+char lineBuffer[17];           // Formatierungspuffer (16 Zeichen + Nullterminator)
 
+/**
+ * @brief Kapselt die Richtungs- und PWM-Ansteuerung des Lueftermotors.
+ * @param speed PWM-Tastverhaeltnis von 0 (Stillstand) bis 255 (Volllast).
+ */
 void setFan(int speed) {
   digitalWrite(PIN_FAN_DIR, speed > 0 ? HIGH : LOW);
   analogWrite(PIN_FAN_PWM, speed);
 }
+
+// ============================================================================
+// 3. SYSTEM-INITIALISIERUNG
+// ============================================================================
 
 void setup() {
   Serial.begin(115200);
@@ -56,6 +83,7 @@ void setup() {
 
   Serial.println("\n[RainyGuard] Booting ESP32 Node...");
 
+  // Pin-Konfigurationen
   pinMode(PIN_RAIN_SENSOR, INPUT);
   pinMode(PIN_BTN_RESET, INPUT_PULLUP);
   pinMode(PIN_FAN_PWM, OUTPUT);
@@ -63,21 +91,24 @@ void setup() {
   pinMode(PIN_LED_STATUS, OUTPUT);
   pinMode(PIN_BUZZER, OUTPUT);
 
-  // Servo Setup
+  // Servo-Setup (50 Hz Standard-PWM fuer Modellbauservos)
   windowServo.setPeriodHertz(50);
   windowServo.attach(PIN_SERVO_WINDOW, 500, 2400);
-  windowServo.write(WINDOW_OPEN_DEG); // Startposition: Offen
+  windowServo.write(WINDOW_OPEN_DEG);
 
+  // Sicheren Grundzustand der Aktoren etablieren
   setFan(0);
   digitalWrite(PIN_LED_STATUS, LOW);
   noTone(PIN_BUZZER);
 
   dht.begin();
   
+  // I2C-Bus defensiv konfigurieren: 50 kHz Takt & 50ms Timeout verhindern ESP32-Freezes
   Wire.begin(I2C_SDA, I2C_SCL);
   Wire.setClock(50000);
   Wire.setTimeOut(50);
 
+  // LCD-Startsequenz
   lcd.init();
   lcd.backlight();
   lcd.clear();
@@ -88,9 +119,14 @@ void setup() {
   delay(1200);
 }
 
+// ============================================================================
+// 4. HAUPTSCHLEIFE (NON-BLOCKING POLLING & FSM)
+// ============================================================================
+
 void loop() {
   unsigned long now = millis();
 
+  // Nicht-blockierender Abtastzyklus (1000 ms) ohne delay()
   if (now - lastUpdate >= 1000) {
     lastUpdate = now;
 
@@ -98,12 +134,14 @@ void loop() {
     temperature = dht.readTemperature();
     rainRaw = analogRead(PIN_RAIN_SENSOR);
 
+    // Sensorausfall abfangen
     if (isnan(humidity) || isnan(temperature)) {
-      Serial.println("[WARN] DHT11 nicht lesbar (Pruefe GPIO 17)");
+      Serial.println("[WARN] DHT11 nicht lesbar (Leitung an GPIO 17 pruefen)");
       return;
     }
 
-    // --- Phasen-Eskalation ---
+    // --- FSM Zustandsuebergaenge ---
+    // Keyestudio Steam-Sensor Verhalten: Trocken ~0-50 ADC, leitend bei Tropfen >500 ADC
     if (rainRaw > 500 || humidity > 90.0) {
       currentPhase = PHASE_3_EMERGENCY_RAIN;
     } else if (humidity >= 78.0) {
@@ -114,11 +152,14 @@ void loop() {
       currentPhase = PHASE_0_NORMAL;
     }
 
+    // Diagnosedaten fuer Serial Monitor / Logging
     Serial.printf("[FSM] Phase: %d | Temp: %.1f C | Hum: %.1f %% | Rain ADC: %d\n", 
                   currentPhase, temperature, humidity, rainRaw);
 
-    // --- Aktor- & Display-Steuerung nach Phase ---
+    // --- Aktoren & LCD synchron zum aktuellen Zustand setzen ---
     switch (currentPhase) {
+      
+      // Zustand 0: Raumluft im Sollbereich, Fenster offen, alle Systeme passiv
       case PHASE_0_NORMAL:
         setFan(0);
         windowServo.write(WINDOW_OPEN_DEG);
@@ -132,10 +173,11 @@ void loop() {
         lcd.print("Status: Normal  ");
         break;
 
+      // Zustand 1: Leichte Ueberfeuchtung -> Luefter auf Teillast (50 % PWM)
       case PHASE_1_VENTILATION:
         setFan(130);
         windowServo.write(WINDOW_OPEN_DEG);
-        digitalWrite(PIN_LED_STATUS, (now / 500) % 2);
+        digitalWrite(PIN_LED_STATUS, (now / 500) % 2); // 1 Hz optisches Blinksignal
         noTone(PIN_BUZZER);
 
         snprintf(lineBuffer, sizeof(lineBuffer), "T:%.1fC H:%.0f%%    ", temperature, humidity);
@@ -145,11 +187,13 @@ void loop() {
         lcd.print("P1: Fan 50%     ");
         break;
 
+      // Zustand 2: Hohe Feuchte -> Volllast-Lueftung & akustischer Vorwarnton
       case PHASE_2_CRITICAL:
         setFan(255);
         windowServo.write(WINDOW_OPEN_DEG);
-        digitalWrite(PIN_LED_STATUS, (now / 200) % 2);
+        digitalWrite(PIN_LED_STATUS, (now / 200) % 2); // Schnelles Warnblinken (2.5 Hz)
         
+        // Diskreter akustischer Intervall-Piepton (1500 Hz, 150ms Puls / 850ms Pause)
         if (now % 1000 < 150) {
           tone(PIN_BUZZER, 1500);
         } else {
@@ -163,11 +207,14 @@ void loop() {
         lcd.print("P2: Max Fan 100%");
         break;
 
+      // Zustand 3: Nasse Dachplatte oder Extremfeuchte
+      // Massnahme: Sofortiger Not-Halt des Luefters gegen Wassereintrag, Fenster verriegeln
       case PHASE_3_EMERGENCY_RAIN:
-        setFan(0); // Not-Aus Luefter
-        windowServo.write(WINDOW_CLOSE_DEG); // Fenster sofort verriegeln
+        setFan(0);
+        windowServo.write(WINDOW_CLOSE_DEG);
         digitalWrite(PIN_LED_STATUS, HIGH);
         
+        // Modulierter Alarmton (Wechsel zwischen 2200 Hz und 1600 Hz alle 200ms)
         if ((now / 200) % 2) {
           tone(PIN_BUZZER, 2200);
         } else {
