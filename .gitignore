@@ -15,3 +15,6 @@ build/
 *.docx
 docs/
 antrag*
+*HANDOUT*
+*handout*
+RAINYGUARD_HANDOUT.md
