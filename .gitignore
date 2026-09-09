@@ -5,19 +5,9 @@ build/
 *.elf
 *.hex
 
-# Lokale IDE-Dateien & Caches
+# Lokale IDE-Dateien
 .vscode/
 .idea/
-
-# Dokumentation & Handouts (Schutz interner Notizen & Arbeitsstaende)
-*.md
-!README.md
-handout*.pdf
-Handout_v*.md
-handouts/
-assets_tmp/
-*HANDOUT*
-*handout*
 
 # Datenschutz & Schulunterlagen (keine Office-/PDF-Dokumente ins Repo)
 *.pdf
@@ -25,3 +15,9 @@ assets_tmp/
 *.docx
 docs/
 antrag*
+*HANDOUT*
+*handout*
+
+# Markdown-Dateien: Alle ignorieren, außer README.md
+*.md
+!README.md

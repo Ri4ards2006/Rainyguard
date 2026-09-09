@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 460" width="1100" height="460">
+  <defs>
+    <style>
+      .title { font-family: "Liberation Sans", sans-serif; font-size: 15px; font-weight: 800; }
+      .param { font-family: "Liberation Mono", monospace; font-size: 11px; fill: #334155; }
+      .bold-param { font-family: "Liberation Mono", monospace; font-size: 11px; font-weight: 700; }
+      .edge-label { font-family: "Liberation Sans", sans-serif; font-size: 11px; font-weight: 700; fill: #475569; }
+      .edge-crit { font-family: "Liberation Sans", sans-serif; font-size: 11px; font-weight: 800; fill: #DC2626; }
+    </style>
+    <filter id="cardShadow" x="-10%" y="-10%" width="125%" height="125%">
+      <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#0F172A" flood-opacity="0.08"/>
+    </filter>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1 L 8 5 L 0 9 z" fill="#0284C7"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1 L 8 5 L 0 9 z" fill="#DC2626"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1 L 8 5 L 0 9 z" fill="#16A34A"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1100" height="460" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="2"/>
+  <g filter="url(#cardShadow)">
+    <rect x="40" y="50" width="220" height="155" rx="10" fill="#FFFFFF" stroke="#0EA5E9" stroke-width="2"/>
+    <rect x="40" y="50" width="220" height="32" rx="8" fill="#E0F2FE"/>
+    <text x="55" y="72" class="title" fill="#0369A1">P0: NORMAL</text>
+    <text x="55" y="102" class="param">Lüfter:  <tspan class="bold-param" fill="#0369A1">0% (Aus)</tspan></text>
+    <text x="55" y="122" class="param">Servo:   <tspan class="bold-param" fill="#0369A1">0° (Offen)</tspan></text>
+    <text x="55" y="142" class="param">LED:     Aus</text>
+    <text x="55" y="162" class="param">Buzzer:  Aus</text>
+    <text x="55" y="185" class="param" fill="#64748B">Hum &lt; 65% | Regen ≤ 500</text>
+  </g>
+  <g filter="url(#cardShadow)">
+    <rect x="440" y="50" width="220" height="155" rx="10" fill="#FFFFFF" stroke="#F59E0B" stroke-width="2"/>
+    <rect x="440" y="50" width="220" height="32" rx="8" fill="#FEF3C7"/>
+    <text x="455" y="72" class="title" fill="#B45309">P1: LÜFTUNG</text>
+    <text x="455" y="102" class="param">Lüfter:  <tspan class="bold-param" fill="#B45309">50% (PWM 130)</tspan></text>
+    <text x="455" y="122" class="param">Servo:   <tspan class="bold-param" fill="#B45309">0° (Offen)</tspan></text>
+    <text x="455" y="142" class="param">LED:     1.0 Hz Blinken</text>
+    <text x="455" y="162" class="param">Buzzer:  Aus</text>
+    <text x="455" y="185" class="param" fill="#64748B">Hum 65..77% | Trocken</text>
+  </g>
+  <g filter="url(#cardShadow)">
+    <rect x="840" y="50" width="220" height="155" rx="10" fill="#FFFFFF" stroke="#EA580C" stroke-width="2"/>
+    <rect x="840" y="50" width="220" height="32" rx="8" fill="#FFEDD5"/>
+    <text x="855" y="72" class="title" fill="#C2410C">P2: WARNUNG</text>
+    <text x="855" y="102" class="param">Lüfter:  <tspan class="bold-param" fill="#C2410C">100% (PWM 255)</tspan></text>
+    <text x="855" y="122" class="param">Servo:   <tspan class="bold-param" fill="#C2410C">0° (Offen)</tspan></text>
+    <text x="855" y="142" class="param">LED:     2.5 Hz Blinken</text>
+    <text x="855" y="162" class="param">Buzzer:  1.5 kHz Beep</text>
+    <text x="855" y="185" class="param" fill="#64748B">Hum 78..89% | Trocken</text>
+  </g>
+  <path d="M 260 100 L 440 100" stroke="#0284C7" stroke-width="2" marker-end="url(#arrow-blue)"/>
+  <text x="350" y="90" class="edge-label" text-anchor="middle">Hum ≥ 65%</text>
+  <path d="M 440 150 L 260 150" stroke="#0284C7" stroke-width="2" marker-end="url(#arrow-blue)"/>
+  <text x="350" y="168" class="edge-label" text-anchor="middle">Hum &lt; 65%</text>
+  <path d="M 660 100 L 840 100" stroke="#0284C7" stroke-width="2" marker-end="url(#arrow-blue)"/>
+  <text x="750" y="90" class="edge-label" text-anchor="middle">Hum ≥ 78%</text>
+  <path d="M 840 150 L 660 150" stroke="#0284C7" stroke-width="2" marker-end="url(#arrow-blue)"/>
+  <text x="750" y="168" class="edge-label" text-anchor="middle">Hum &lt; 78%</text>
+  <g filter="url(#cardShadow)">
+    <rect x="360" y="270" width="380" height="155" rx="10" fill="#FFFFFF" stroke="#DC2626" stroke-width="2.5"/>
+    <rect x="360" y="270" width="380" height="34" rx="8" fill="#FEE2E2"/>
+    <text x="550" y="293" class="title" fill="#991B1B" text-anchor="middle">P3: EMERGENCY LOCKDOWN (REGEN / NOTFALL)</text>
+    <text x="385" y="328" class="param">Lüfter:         <tspan class="bold-param" fill="#DC2626">0% (HARD NOT-AUS)</tspan></text>
+    <text x="385" y="348" class="param">Fenster-Servo:  <tspan class="bold-param" fill="#DC2626">90° (MECHANISCH VERRIEGELT)</tspan></text>
+    <text x="385" y="368" class="param">Signalisierung: <tspan class="bold-param" fill="#DC2626">Dauer-LED &amp; 2-Ton Sirene (2.2 kHz)</tspan></text>
+    <text x="385" y="395" class="bold-param" fill="#B91C1C">Bedingung: Regen ADC &gt; 500  ODER  Hum &gt; 90.0%</text>
+  </g>
+  <path d="M 150 205 L 150 350 L 360 350" stroke="#DC2626" stroke-width="2" stroke-dasharray="4,3" marker-end="url(#arrow-red)" fill="none"/>
+  <path d="M 550 205 L 550 270" stroke="#DC2626" stroke-width="2" stroke-dasharray="4,3" marker-end="url(#arrow-red)" fill="none"/>
+  <text x="555" y="240" class="edge-crit">REGEN OVERRIDE</text>
+  <path d="M 950 205 L 950 350 L 740 350" stroke="#DC2626" stroke-width="2" stroke-dasharray="4,3" marker-end="url(#arrow-red)" fill="none"/>
+  <path d="M 440 270 C 420 230 420 220 445 205" stroke="#16A34A" stroke-width="2" marker-end="url(#arrow-green)" fill="none"/>
+  <text x="330" y="240" class="edge-label" fill="#16A34A">Trocken &amp; Hum ≤ 78%</text>
+</svg>
