@@ -5,9 +5,19 @@ build/
 *.elf
 *.hex
 
-# Lokale IDE-Dateien
+# Lokale IDE-Dateien & Caches
 .vscode/
 .idea/
+
+# Dokumentation & Handouts (Schutz interner Notizen & Arbeitsstaende)
+*.md
+!README.md
+handout*.pdf
+Handout_v*.md
+handouts/
+assets_tmp/
+*HANDOUT*
+*handout*
 
 # Datenschutz & Schulunterlagen (keine Office-/PDF-Dokumente ins Repo)
 *.pdf
@@ -15,6 +25,3 @@ build/
 *.docx
 docs/
 antrag*
-*HANDOUT*
-*handout*
-RAINYGUARD_HANDOUT.md

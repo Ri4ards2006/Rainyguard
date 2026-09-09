@@ -4,6 +4,8 @@
  * 
  * Deterministische Finite State Machine (FSM) zur sensorgestuetzten Steuerung
  * von Lueftung, Fenstermechanik und akustischen/visuellen Warnsystemen.
+ * Inklusive latenzfreier Hardware-Interrupt-Service-Routine (ISR) im IRAM
+ * fuer sofortigen Regenschutz ohne Polling-Verzoegerung.
  * 
  * Hardware: Keyestudio ESP32 Smart Home Shield
  */
@@ -22,6 +24,10 @@
 #define PIN_RAIN_SENSOR   34  // Analog-In: Keyestudio Steam/Water Drop Sensor (Dach)
 #define PIN_DHT           17  // Digital I/O: DHT11 Kombisensor (Temp/Feuchte)
 #define PIN_DHT_TYPE      DHT11
+#define PIN_RAIN_SENSOR       34  // Analog-In: Keyestudio Steam/Water Drop Sensor (Dach, ADC1_CH6)
+#define PIN_RAIN_INTERRUPT    32  // Digitaler Hardware-Interrupt: DO-Trigger mit internem Pull-up (Active LOW)
+#define PIN_DHT               17  // Digital I/O: DHT11 Kombisensor (Temp/Feuchte)
+#define PIN_DHT_TYPE          DHT11
 
 // Aktoren & Signalisierung
 #define PIN_FAN_PWM       18  // Luefter: Drehzahlsteuerung via PWM (0-255)
@@ -30,14 +36,24 @@
 #define PIN_BUZZER        25  // Passiver Piezo-Buzzer (benoetigt Frequenzsignal via tone())
 #define PIN_BTN_RESET     16  // Taster mit internem Pullup
 #define PIN_SERVO_WINDOW  13  // PWM-Signal fuer Servomotor (Fensterverriegelung)
+#define PIN_FAN_PWM           18  // Luefter: Drehzahlsteuerung via PWM (0-255)
+#define PIN_FAN_DIR           19  // Luefter: H-Bruecken Richtungs-/Enable-Pin
+#define PIN_LED_STATUS        12  // Status-LED (Taktung signalisiert Eskalationsstufe)
+#define PIN_BUZZER            25  // Passiver Piezo-Buzzer (benoetigt Frequenzsignal via tone())
+#define PIN_BTN_RESET         16  // Taster mit internem Pullup
+#define PIN_SERVO_WINDOW      13  // PWM-Signal fuer Servomotor (Fensterverriegelung)
 
 // Hardware-I2C Pins (Standard ESP32 Bus)
 #define I2C_SDA           21
 #define I2C_SCL           22
+#define I2C_SDA               21
+#define I2C_SCL               22
 
 // Mechanische Anschlaege des Fensterservos
 #define WINDOW_OPEN_DEG    0  // Grundstellung: Lueftung zulaessig
 #define WINDOW_CLOSE_DEG  90  // Notfallstellung: Mechanisch verriegelt
+#define WINDOW_OPEN_DEG        0  // Grundstellung: Lueftung zulaessig
+#define WINDOW_CLOSE_DEG      90  // Notfallstellung: Mechanisch verriegelt
 
 // ============================================================================
 // 2. OBJEKT-INSTANZIIERUNG & ZUSTANDSKONFIGURATION
@@ -64,6 +80,18 @@ int rainRaw = 0;
 unsigned long lastUpdate = 0;
 char lineBuffer[17];           // Formatierungspuffer (16 Zeichen + Nullterminator)
 
+// Latenzfreie Interrupt-Steuerung (Hardware-ISR im IRAM)
+volatile bool rainInterruptTriggered = false;
+
+/**
+ * @brief Hardware-Interrupt-Service-Routine (ISR) fuer sofortige Regenerkennung.
+ * Liegt im IRAM (Instruction RAM), um Ausfuehrungsverzoegerungen durch SPI-Flash-Zugriffe
+ * zu eliminieren (hartes Echtzeitverhalten).
+ */
+void IRAM_ATTR isr_rain_trigger() {
+  rainInterruptTriggered = true;
+}
+
 /**
  * @brief Kapselt die Richtungs- und PWM-Ansteuerung des Lueftermotors.
  * @param speed PWM-Tastverhaeltnis von 0 (Stillstand) bis 255 (Volllast).
@@ -85,11 +113,15 @@ void setup() {
 
   // Pin-Konfigurationen
   pinMode(PIN_RAIN_SENSOR, INPUT);
+  pinMode(PIN_RAIN_INTERRUPT, INPUT_PULLUP);
   pinMode(PIN_BTN_RESET, INPUT_PULLUP);
   pinMode(PIN_FAN_PWM, OUTPUT);
   pinMode(PIN_FAN_DIR, OUTPUT);
   pinMode(PIN_LED_STATUS, OUTPUT);
   pinMode(PIN_BUZZER, OUTPUT);
+
+  // Hardware-Interrupt fuer latenzfreien Regenschutz aktivieren (FALLING-Flanke)
+  attachInterrupt(digitalPinToInterrupt(PIN_RAIN_INTERRUPT), isr_rain_trigger, FALLING);
 
   // Servo-Setup (50 Hz Standard-PWM fuer Modellbauservos)
   windowServo.setPeriodHertz(50);
@@ -127,6 +159,31 @@ void loop() {
   unsigned long now = millis();
 
   // Nicht-blockierender Abtastzyklus (1000 ms) ohne delay()
+  // ==========================================================================
+  // Latenzfreie Interrupt-Auswertung (Sofortige Notverriegelung ohne 1000ms Delay)
+  // ==========================================================================
+  if (rainInterruptTriggered) {
+    rainInterruptTriggered = false;
+    currentPhase = PHASE_3_EMERGENCY_RAIN;
+
+    // Sofortige Notfallmassnahmen direkt einleiten (Zero-Latency Hardware-Schutz)
+    setFan(0);
+    windowServo.write(WINDOW_CLOSE_DEG);
+    digitalWrite(PIN_LED_STATUS, HIGH);
+    tone(PIN_BUZZER, 2200);
+
+    // Sofortige Displaymeldung ausgeben
+    lcd.setCursor(0, 0);
+    lcd.print("! ALARM: REGEN !");
+    lcd.setCursor(0, 1);
+    lcd.print("LOCKDOWN / NOT  ");
+
+    Serial.println("\n[EMERGENCY] Hardware-ISR ausgeloest: Sofortige Notverriegelung aktiv!");
+  }
+
+  // ==========================================================================
+  // Nicht-blockierender Abtastzyklus (1000 ms) & FSM-Regelkreis
+  // ==========================================================================
   if (now - lastUpdate >= 1000) {
     lastUpdate = now;
 
@@ -143,6 +200,8 @@ void loop() {
     // --- FSM Zustandsuebergaenge ---
     // Keyestudio Steam-Sensor Verhalten: Trocken ~0-50 ADC, leitend bei Tropfen >500 ADC
     if (rainRaw > 500 || humidity > 90.0) {
+    // Zusaetzlich wird der digitale Pegel des Interrupt-Pins beruecksichtigt (Active LOW)
+    if (rainRaw > 500 || humidity > 90.0 || digitalRead(PIN_RAIN_INTERRUPT) == LOW) {
       currentPhase = PHASE_3_EMERGENCY_RAIN;
     } else if (humidity >= 78.0) {
       currentPhase = PHASE_2_CRITICAL;
@@ -155,6 +214,8 @@ void loop() {
     // Diagnosedaten fuer Serial Monitor / Logging
     Serial.printf("[FSM] Phase: %d | Temp: %.1f C | Hum: %.1f %% | Rain ADC: %d\n", 
                   currentPhase, temperature, humidity, rainRaw);
+    Serial.printf("[FSM] Phase: %d | Temp: %.1f C | Hum: %.1f %% | Rain ADC: %d | Rain INT: %d\n", 
+                  currentPhase, temperature, humidity, rainRaw, digitalRead(PIN_RAIN_INTERRUPT));
 
     // --- Aktoren & LCD synchron zum aktuellen Zustand setzen ---
     switch (currentPhase) {
