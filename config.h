@@ -1,1 +1,1 @@
-int fan_speed = 200;
+int fan_speed = 100;
